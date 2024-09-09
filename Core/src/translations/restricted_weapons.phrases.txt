@@ -1,0 +1,13 @@
+"Phrases"
+{
+    "block"
+    {
+        "ru"        "Оружие: {RED}%s{DEFAULT} ограничено в количестве {RED}%i"
+        "en"        "Weapon: {RED}%s{DEFAULT} is restricted to {RED}%i"
+    }
+    "block_team"
+    {
+        "ru"        "Оружие: {RED}%s{DEFAULT} ограничено в количестве {RED}%i{DEFAULT} (на команду)"
+        "en"        "Weapon: {RED}%s{DEFAULT} is restricted to {RED}%i{DEFAULT} (per team)"
+    }
+}
