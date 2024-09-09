@@ -26,6 +26,8 @@ void StartupServer()
 	gpGlobals = g_pUtils->GetCGlobalVars();
 }
 
+const char* szWeapons[64];
+
 bool restricted_weapons_vip::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late)
 {
 	PLUGIN_SAVEVARS();
@@ -48,12 +50,28 @@ bool restricted_weapons_vip::Unload(char *error, size_t maxlen)
 
 bool OnWeaponRestricted(int iSlot, const char* szWeapon)
 {
-	if (g_pVIPApi->VIP_IsClientVIP(iSlot) && g_pVIPApi->VIP_GetClientFeatureBool(iSlot, "restricted_weapons"))
+	if (szWeapons[iSlot][0])
 	{
-		const char* szWeapons = g_pVIPApi->VIP_GetClientFeatureString(iSlot, "restricted_weapons");
-		if(strstr(szWeapons, szWeapon)) return true;
+		if(strstr(szWeapons[iSlot], szWeapon)) return true;
 	}
 	return false;
+}
+
+bool OnToggle(int iSlot, const char* szFeature, VIP_ToggleState eOldStatus, VIP_ToggleState& eNewStatus)
+{
+	if(eNewStatus == ENABLED)
+		szWeapons[iSlot] = g_pVIPApi->VIP_GetClientFeatureString(iSlot, "restricted_weapons");
+	else
+		szWeapons[iSlot] = "";
+	return false;
+}
+
+void OnClientLoaded(int iSlot, bool bIsVIP)
+{
+	if(bIsVIP)
+		szWeapons[iSlot] = g_pVIPApi->VIP_GetClientFeatureString(iSlot, "restricted_weapons");
+	else 
+		szWeapons[iSlot] = "";
 }
 
 void restricted_weapons_vip::AllPluginsLoaded()
@@ -88,7 +106,8 @@ void restricted_weapons_vip::AllPluginsLoaded()
 		return;
 	}
 	g_pRWApi->HookOnWeaponRestricted(OnWeaponRestricted);
-	g_pVIPApi->VIP_RegisterFeature("restricted_weapons", VIP_BOOL, TOGGLABLE);
+	g_pVIPApi->VIP_RegisterFeature("restricted_weapons", VIP_BOOL, TOGGLABLE, nullptr, OnToggle);
+	g_pVIPApi->VIP_OnClientLoaded(OnClientLoaded);
 	g_pUtils->StartupServer(g_PLID, StartupServer);
 }
 
