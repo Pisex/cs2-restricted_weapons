@@ -34,8 +34,6 @@ private:
 	const char* GetVersion();
 	const char* GetDate();
 	const char* GetLogTag();
-private:
-	bool Hook_OnItemPickup(CCSWeaponBase *pWeapon);
 };
 
 class RWApi : public IRWApi

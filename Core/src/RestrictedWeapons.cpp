@@ -28,11 +28,54 @@ std::map<std::string, std::string> g_vecPhrases;
 
 std::map<int, std::unordered_map<std::string, int>> g_mRestrictedWeapons;
 
-SH_DECL_MANUALHOOK1(OnItemPickup, 0, 0, 0, bool, CCSWeaponBase *);
-
 CGameEntitySystem* GameEntitySystem()
 {
 	return g_pUtils->GetCGameEntitySystem();
+}
+
+const char* GetWeaponByDefIndex(int iIndex)
+{
+	const char* szWeapon = nullptr;
+	switch(iIndex)
+	{
+		case 1: szWeapon = "weapon_deagle"; break;
+		case 2: szWeapon = "weapon_elite"; break;
+		case 3: szWeapon = "weapon_fiveseven"; break;
+		case 4: szWeapon = "weapon_glock"; break;
+		case 7: szWeapon = "weapon_ak47"; break;
+		case 8: szWeapon = "weapon_aug"; break;
+		case 9: szWeapon = "weapon_awp"; break;
+		case 10: szWeapon = "weapon_famas"; break;
+		case 11: szWeapon = "weapon_g3sg1"; break;
+		case 13: szWeapon = "weapon_galilar"; break;
+		case 14: szWeapon = "weapon_m249"; break;
+		case 16: szWeapon = "weapon_m4a1"; break;
+		case 17: szWeapon = "weapon_mac10"; break;
+		case 19: szWeapon = "weapon_p90"; break;
+		case 23: szWeapon = "weapon_mp5sd"; break;
+		case 24: szWeapon = "weapon_ump45"; break;
+		case 25: szWeapon = "weapon_xm1014"; break;
+		case 26: szWeapon = "weapon_bizon"; break;
+		case 27: szWeapon = "weapon_mag7"; break;
+		case 28: szWeapon = "weapon_negev"; break;
+		case 29: szWeapon = "weapon_sawedoff"; break;
+		case 30: szWeapon = "weapon_tec9"; break;
+		case 31: szWeapon = "weapon_taser"; break;
+		case 32: szWeapon = "weapon_hkp2000"; break;
+		case 33: szWeapon = "weapon_mp7"; break;
+		case 34: szWeapon = "weapon_mp9"; break;
+		case 35: szWeapon = "weapon_nova"; break;
+		case 36: szWeapon = "weapon_p250"; break;
+		case 38: szWeapon = "weapon_scar20"; break;
+		case 39: szWeapon = "weapon_sg556"; break;
+		case 40: szWeapon = "weapon_ssg08"; break;
+		case 60: szWeapon = "weapon_m4a1_silencer"; break;
+		case 61: szWeapon = "weapon_usp_silencer"; break;
+		case 63: szWeapon = "weapon_cz75a"; break;
+		case 64: szWeapon = "weapon_revolver"; break;
+		default: szWeapon = "weapon_knife"; break;
+	}
+	return szWeapon;
 }
 
 void LoadConfigs()
@@ -104,16 +147,6 @@ bool RestrictedWeapons::Load(PluginId id, ISmmAPI* ismm, char* error, size_t max
 
 	g_SMAPI->AddListener( this, this );
 
-	CModule libserver(g_pSource2Server);
-	void* pCCSPlayer_WeaponServicesVTable = libserver.GetVirtualTableByName("CCSPlayer_WeaponServices");
-	if (!pCCSPlayer_WeaponServicesVTable) return false;
-	else
-	{
-		SH_MANUALHOOK_RECONFIGURE(OnItemPickup, 23, 0, 0);
-		g_iOnItemPickupId = SH_ADD_MANUALDVPHOOK(OnItemPickup, pCCSPlayer_WeaponServicesVTable, SH_MEMBER(this, &RestrictedWeapons::Hook_OnItemPickup), false);
-	}
-
-	
 	g_pRWApi = new RWApi();
 	g_pRWCore = g_pRWApi;
 
@@ -188,24 +221,43 @@ void* RestrictedWeapons::OnMetamodQuery(const char* iface, int* ret)
 	return nullptr;
 }
 
-bool RestrictedWeapons::Hook_OnItemPickup(CCSWeaponBase *pWeapon)
+bool RestrictedWeapons::Unload(char *error, size_t maxlen)
 {
-	if(!g_pUtils) RETURN_META_VALUE(MRES_IGNORED, true);
-	CCSPlayer_WeaponServices *pWeaponServices = META_IFACEPTR(CCSPlayer_WeaponServices);
-	if(!pWeaponServices) RETURN_META_VALUE(MRES_IGNORED, true);
-	CCSPlayerPawn* pPawn = pWeaponServices->__m_pChainEntity();
-	if(!pPawn) RETURN_META_VALUE(MRES_IGNORED, true);
-	auto pController = (CCSPlayerController*)(pPawn->m_hController().Get());
-	if(!pController) RETURN_META_VALUE(MRES_IGNORED, true);
-	int iPlayerSlot = pController->GetEntityIndex().Get() - 1;
-	if (iPlayerSlot < 0 || iPlayerSlot > 63) RETURN_META_VALUE(MRES_IGNORED, true);
+	ConVar_Unregister();
+	
+	return true;
+}
+
+void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
+{
+	int iSlot = pEvent->GetInt("userid");
+	CCSPlayerController* pPlayer = CCSPlayerController::FromSlot(iSlot);
+	if(!pPlayer) return;
+	CCSPlayerPawn* pPawn = pPlayer->GetPlayerPawn();
+	if(!pPawn) return;
+	CCSPlayer_WeaponServices* m_pWeaponServices = pPawn->m_pWeaponServices();
+	if(!m_pWeaponServices) return;
+	int iDefIndex = pEvent->GetInt("defindex");
+	CUtlVector<CHandle<CBasePlayerWeapon>>* weapons = m_pWeaponServices->m_hMyWeapons();
+	CCSWeaponBase* pWeapon = nullptr;
+	for(int i = 0; i < weapons->Count(); i++)
+	{
+		CCSWeaponBase* pWeapon2 = (CCSWeaponBase*)weapons->Element(i).Get();
+		if(!pWeapon2) continue;
+		if(pWeapon2->m_AttributeManager().m_Item().m_iItemDefinitionIndex() == iDefIndex) {
+			pWeapon = pWeapon2;
+			break;
+		}
+	}
+	if(!pWeapon) return;
+	const char* szWeapon = GetWeaponByDefIndex(iDefIndex);
 	int iTeam = pPawn->GetTeam();
 	int iPlayersCount = GetNiggers(iTeam);
 
 	int iLast = -1;
 	int bestFit = -1;
 
-    for (const auto& it : g_mRestrictedWeapons)
+	for (const auto& it : g_mRestrictedWeapons)
     {
 		if(iLast == -1 && it.first <= iPlayersCount) {
 			iLast = it.first;
@@ -219,17 +271,16 @@ bool RestrictedWeapons::Hook_OnItemPickup(CCSWeaponBase *pWeapon)
     if (bestFit != -1)
     {
         const auto& weaponMap = g_mRestrictedWeapons[bestFit];
-        const char* weaponClassname = pWeapon->GetClassname();
-        auto itWeapon = weaponMap.find(weaponClassname);
+        auto itWeapon = weaponMap.find(szWeapon);
         if (itWeapon != weaponMap.end())
         {
             int weaponValue = itWeapon->second;
-			int iPlayersWeaponCount = GetWeaponCount(weaponClassname, iTeam);
-			if(iPlayersWeaponCount <= weaponValue || weaponValue == -1) RETURN_META_VALUE(MRES_IGNORED, true);
+			int iPlayersWeaponCount = GetWeaponCount(szWeapon, iTeam);
+			if(iPlayersWeaponCount <= weaponValue || weaponValue == -1) return;
 			else {
-				if(g_pRWApi->SendOnWeaponRestrictedCallback(iPlayerSlot, weaponClassname)) RETURN_META_VALUE(MRES_IGNORED, true);
-				engine->ClientCommand(iPlayerSlot, "play %s", g_szBlockSound.c_str());
-				g_pUtils->PrintToChat(iPlayerSlot, g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"].c_str(), pWeapon->GetWeaponVData()->m_szName().String(), weaponValue);
+				if(g_pRWApi->SendOnWeaponRestrictedCallback(iSlot, szWeapon)) return;
+				engine->ClientCommand(iSlot, "play %s", g_szBlockSound.c_str());
+				g_pUtils->PrintToChat(iSlot, g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"].c_str(), g_vecPhrases[szWeapon].c_str(), weaponValue);
 				CHandle<CCSWeaponBase> hWeapon = pWeapon->GetHandle();
 				CHandle<CCSPlayerPawn> hPawn = pPawn->GetHandle();
 				g_pUtils->NextFrame([hWeapon, hPawn](){
@@ -256,19 +307,10 @@ bool RestrictedWeapons::Hook_OnItemPickup(CCSWeaponBase *pWeapon)
 					pWeaponServices->DropWeapon(pWeapon);
 					g_pUtils->RemoveEntity(pWeapon);
 				});
-				RETURN_META_VALUE(MRES_SUPERCEDE, false);
 			}
         }
     }
 
-	RETURN_META_VALUE(MRES_IGNORED, false);
-}
-
-bool RestrictedWeapons::Unload(char *error, size_t maxlen)
-{
-	ConVar_Unregister();
-	
-	return true;
 }
 
 void RestrictedWeapons::AllPluginsLoaded()
@@ -307,6 +349,9 @@ void RestrictedWeapons::AllPluginsLoaded()
 	const char* g_pszLanguage = szLanguage.c_str();
 	for (KeyValues *pKey = g_kvPhrases->GetFirstTrueSubKey(); pKey; pKey = pKey->GetNextTrueSubKey())
 		g_vecPhrases[std::string(pKey->GetName())] = std::string(pKey->GetString(g_pszLanguage));
+
+	g_pUtils->HookEvent(g_PLID, "item_pickup", OnItemPickup);
+	g_pUtils->HookEvent(g_PLID, "item_equip", OnItemPickup);
 }
 
 ///////////////////////////////////////
