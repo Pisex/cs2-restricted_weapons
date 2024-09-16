@@ -20,6 +20,7 @@ int g_iOnItemPickupId = -1;
 std::string g_szBlockSound;
 int g_iTypePlayers = 0;
 int g_iTypeWeapons = 0;
+int g_iUnblockType = 0;
 
 RWApi* g_pRWApi = nullptr;
 IRWApi* g_pRWCore = nullptr;
@@ -92,6 +93,7 @@ void LoadConfigs()
 		g_mRestrictedWeapons.clear();
 		g_iTypePlayers = pKV->GetInt("type_players", 1);
 		g_iTypeWeapons = pKV->GetInt("type_weapons", 1);
+		g_iUnblockType = pKV->GetInt("unblock_type", 0);
 		g_szBlockSound = strdup(pKV->GetString("block_sound"));
 		char szMap[64];
 		g_SMAPI->Format(szMap, sizeof(szMap), "%s", g_pUtils->GetCGlobalVars()->mapname);
@@ -231,6 +233,7 @@ bool RestrictedWeapons::Unload(char *error, size_t maxlen)
 void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 {
 	int iSlot = pEvent->GetInt("userid");
+	if(iSlot < 0 || iSlot > 64) return;
 	CCSPlayerController* pPlayer = CCSPlayerController::FromSlot(iSlot);
 	if(!pPlayer) return;
 	CCSPlayerPawn* pPawn = pPlayer->GetPlayerPawn();
@@ -278,7 +281,11 @@ void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 			int iPlayersWeaponCount = GetWeaponCount(szWeapon, iTeam);
 			if(iPlayersWeaponCount <= weaponValue || weaponValue == -1) return;
 			else {
-				if(g_pRWApi->SendOnWeaponRestrictedCallback(iSlot, szWeapon)) return;
+				if(g_pRWApi->SendOnWeaponRestrictedCallback(iSlot, szWeapon))
+				{
+					if(g_iUnblockType == 1 && weaponValue > 0) return;
+					else if(g_iUnblockType == 0) return;
+				}
 				engine->ClientCommand(iSlot, "play %s", g_szBlockSound.c_str());
 				g_pUtils->PrintToChat(iSlot, g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"].c_str(), g_vecPhrases[szWeapon].c_str(), weaponValue);
 				CHandle<CCSWeaponBase> hWeapon = pWeapon->GetHandle();
@@ -295,13 +302,17 @@ void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 					if(iSteamID != 0)
 					{
 						CCSPlayerController* pPlayer = GetPlayer(iSteamID);
-						if(!pPlayer) return;
-						CCSPlayerPawn* pPawn = pPlayer->GetPlayerPawn();
-						if(!pPawn || !pPawn->IsAlive()) return;
-						CCSPlayerController_InGameMoneyServices* pMoneyServices = pPlayer->m_pInGameMoneyServices();
-						if(pMoneyServices) {
-							pMoneyServices->m_iAccount() += iPrice;
-							g_pUtils->SetStateChanged(pPlayer, "CCSPlayerController", "m_pInGameMoneyServices");
+						if(pPlayer)
+						{
+							CCSPlayerPawn* pPawn = pPlayer->GetPlayerPawn();
+							if(pPawn && pPawn->IsAlive())
+							{
+								CCSPlayerController_InGameMoneyServices* pMoneyServices = pPlayer->m_pInGameMoneyServices();
+								if(pMoneyServices) {
+									pMoneyServices->m_iAccount() += iPrice;
+									g_pUtils->SetStateChanged(pPlayer, "CCSPlayerController", "m_pInGameMoneyServices");
+								}
+							}
 						}
 					}
 					pWeaponServices->DropWeapon(pWeapon);
@@ -362,7 +373,7 @@ const char* RestrictedWeapons::GetLicense()
 
 const char* RestrictedWeapons::GetVersion()
 {
-	return "1.0";
+	return "1.1";
 }
 
 const char* RestrictedWeapons::GetDate()
