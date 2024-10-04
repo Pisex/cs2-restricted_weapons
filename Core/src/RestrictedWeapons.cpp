@@ -290,13 +290,11 @@ void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 				g_pUtils->PrintToChat(iSlot, g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"].c_str(), g_vecPhrases[szWeapon].c_str(), weaponValue);
 				CHandle<CCSWeaponBase> hWeapon = pWeapon->GetHandle();
 				CHandle<CCSPlayerPawn> hPawn = pPawn->GetHandle();
-				g_pUtils->NextFrame([hWeapon, hPawn](){
+				g_pUtils->NextFrame([iSlot, hWeapon, hPawn](){
 					CCSWeaponBase *pWeapon = (CCSWeaponBase*)hWeapon.Get();
 					if(!pWeapon) return;
 					CCSPlayerPawn *pPawn = (CCSPlayerPawn*)hPawn.Get();
 					if(!pPawn) return;
-					CCSPlayer_WeaponServices *pWeaponServices = pPawn->m_pWeaponServices();
-					if(!pWeaponServices) return;
 					int iPrice = pWeapon->GetWeaponVData()->m_nPrice();
 					uint32 iSteamID = pWeapon->m_OriginalOwnerXuidLow();
 					if(iSteamID != 0)
@@ -315,7 +313,7 @@ void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 							}
 						}
 					}
-					pWeaponServices->DropWeapon(pWeapon);
+					g_pPlayers->DropWeapon(iSlot, pWeapon);
 					g_pUtils->RemoveEntity(pWeapon);
 				});
 			}
