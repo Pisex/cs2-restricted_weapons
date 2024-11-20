@@ -21,6 +21,7 @@ std::string g_szBlockSound;
 int g_iTypePlayers = 0;
 int g_iTypeWeapons = 0;
 int g_iUnblockType = 0;
+bool g_bSpecPlayers;
 
 RWApi* g_pRWApi = nullptr;
 IRWApi* g_pRWCore = nullptr;
@@ -94,6 +95,7 @@ void LoadConfigs()
 		g_iTypePlayers = pKV->GetInt("type_players", 1);
 		g_iTypeWeapons = pKV->GetInt("type_weapons", 1);
 		g_iUnblockType = pKV->GetInt("unblock_type", 0);
+		g_bSpecPlayers = pKV->GetBool("spec_players", false);
 		g_szBlockSound = strdup(pKV->GetString("block_sound"));
 		char szMap[64];
 		g_SMAPI->Format(szMap, sizeof(szMap), "%s", g_pUtils->GetCGlobalVars()->mapname);
@@ -164,8 +166,10 @@ int GetNiggers(int iTeam)
 		if(!pPlayer) continue;
 		CCSPlayerPawn* pPlayerPawn = pPlayer->GetPlayerPawn();
 		if(!pPlayerPawn) continue;
+		int iTeam2 = pPlayerPawn->GetTeam();
+		if(iTeam2 < 2 && !g_bSpecPlayers) continue;
 		if(g_iTypePlayers == 1) iCount++;
-		else if(g_iTypePlayers == 2 && (iTeam == pPlayerPawn->GetTeam())) iCount++;
+		else if(g_iTypePlayers == 2 && (iTeam == iTeam2)) iCount++;
 	}
 	return iCount;
 }
@@ -371,7 +375,7 @@ const char* RestrictedWeapons::GetLicense()
 
 const char* RestrictedWeapons::GetVersion()
 {
-	return "1.1";
+	return "1.1.1";
 }
 
 const char* RestrictedWeapons::GetDate()
