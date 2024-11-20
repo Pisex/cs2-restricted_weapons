@@ -56,11 +56,8 @@ jobs:
           cd external
           git clone --recursive --branch master --single-branch https://github.com/alliedmodders/metamod-source.git
           git clone --recursive --branch cs2 --single-branch https://github.com/alliedmodders/hl2sdk.git hl2sdk-cs2
-          cd ../..
-          mkdir samples
-          cd samples
+          cd ..
           git clone https://github.com/pisex/SchemaEntity.git
-          cd ${{ github.workspace }}
 
       - name: Build plugins
         run: |
