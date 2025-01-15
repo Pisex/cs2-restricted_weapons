@@ -290,7 +290,7 @@ void OnItemPickup(const char* szName, IGameEvent* pEvent, bool bDontBroadcast)
 					if(g_iUnblockType == 1 && weaponValue > 0) return;
 					else if(g_iUnblockType == 0) return;
 				}
-				engine->ClientCommand(iSlot, "play %s", g_szBlockSound.c_str());
+				g_pPlayers->EmitSound(iSlot, pPlayer->entindex(), g_szBlockSound.c_str(), 1, 1.0);
 				g_pUtils->PrintToChat(iSlot, g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"].c_str(), g_vecPhrases[szWeapon].c_str(), weaponValue);
 				CHandle<CCSWeaponBase> hWeapon = pWeapon->GetHandle();
 				CHandle<CCSPlayerPawn> hPawn = pPawn->GetHandle();
@@ -375,7 +375,7 @@ const char* RestrictedWeapons::GetLicense()
 
 const char* RestrictedWeapons::GetVersion()
 {
-	return "1.1.1";
+	return "1.1.2";
 }
 
 const char* RestrictedWeapons::GetDate()
