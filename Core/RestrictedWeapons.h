@@ -15,9 +15,10 @@
 #include <keyvalues.h>
 #include "CCSPlayerController.h"
 #include "include/menus.h"
+#include "include/utils.h"
+#include "include/players.h"
 #include "include/restricted_weapons.h"
 #include "module.h"
-#include "funchook.h"
 
 class RestrictedWeapons final : public ISmmPlugin, public IMetamodListener
 {

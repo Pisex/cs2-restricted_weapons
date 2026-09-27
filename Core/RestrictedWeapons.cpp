@@ -32,37 +32,6 @@ std::map<std::string, std::string> g_vecPhrases;
 
 std::map<int, std::unordered_map<std::string, int>> g_mRestrictedWeapons;
 
-namespace AcquireResult
-{
-  enum Type
-  {
-    Allowed,
-    InvalidItem,
-    AlreadyOwned,
-    AlreadyPurchased,
-    ReachedGrenadeTypeLimit,
-    ReachedGrenadeTotalLimit,
-    NotAllowedByTeam,
-    NotAllowedByMap,
-    NotAllowedByMode,
-    NotAllowedForPurchase,
-    NotAllowedByProhibition,
-  };
-}
-
-namespace AcquireMethod
-{
-	enum Type
-	{
-		PickUp,
-		Buy,
-	};
-}
-
-AcquireResult::Type (*UTIL_CanAcquire)(CPlayer_ItemServices* service, CEconItemView* pItemView, AcquireMethod::Type eType, uint* pLimit) = nullptr;
-
-funchook_t* m_CanAcquireHook = nullptr;
-
 const char* GetWeaponByDefIndex(int iIndex)
 {
 	const char* szWeapon = nullptr;
@@ -108,8 +77,9 @@ const char* GetWeaponByDefIndex(int iIndex)
 	return szWeapon;
 }
 
-int GetNiggers(int iTeam)
+int GetPlayersCount(int iTeam)
 {
+	if(!g_pPlayers) return 0;
 	int iCount = 0;
 	for(int i = 0; i < 64; i++)
 	{
@@ -125,6 +95,7 @@ int GetNiggers(int iTeam)
 
 int GetWeaponCount(const char* szWeapon, int iTeam)
 {
+	if(!szWeapon) return 0;
 	int iCount = 0;
 	for(int i = 0; i < 64; i++ )
 	{
@@ -137,47 +108,51 @@ int GetWeaponCount(const char* szWeapon, int iTeam)
 		if(m_pWeaponServices)
 		{
 			CUtlVector<CHandle<CBasePlayerWeapon>>* weapons = m_pWeaponServices->m_hMyWeapons();
-			
-			FOR_EACH_VEC(*weapons, i)
+			if(!weapons) continue;
+
+			FOR_EACH_VEC(*weapons, iWpn)
 			{
-				CBasePlayerWeapon* pWeapon = (*weapons)[i].Get();
+				CBasePlayerWeapon* pWeapon = (*weapons)[iWpn].Get();
 				if(!pWeapon) continue;
-				if(!strcmp(pWeapon->GetClassname(), szWeapon)) iCount++;
+				const char* szClassname = pWeapon->GetClassname();
+				if(!szClassname) continue;
+				if(!strcmp(szClassname, szWeapon)) iCount++;
 			}
 		}
 	}
 	return iCount;
 }
 
-CCSPlayerController* GetPlayer(uint32 iSteamID)
+CCSPlayerController* GetPlayer(uint64 iSteamID)
 {
+    if(!g_pPlayers) return nullptr;
     for(int i = 0; i < 64; i++)
     {
         if(g_pPlayers->IsFakeClient(i)) continue;
         if(!g_pPlayers->IsAuthenticated(i)) continue;
         if(!g_pPlayers->IsConnected(i)) continue;
         if(!g_pPlayers->IsInGame(i)) continue;
-        int iSteamID2 = g_pPlayers->GetSteamID64(i);
+        uint64 iSteamID2 = g_pPlayers->GetSteamID64(i);
         if(iSteamID2 == iSteamID)
             return CCSPlayerController::FromSlot(i);
     }
     return nullptr;
 }
 
-AcquireResult::Type CanAcquireHook(CPlayer_ItemServices* service, CEconItemView* pItemView, AcquireMethod::Type eType, uint* pLimit)
+AcquireResult::Type CanAcquireHook(int iSlot, CPlayer_ItemServices* service, CEconItemView* pItemView, AcquireMethod::Type eType)
 {
-	if(!service || !pItemView) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
+	if(!service || !pItemView) return AcquireResult::Type::Allowed;
 	CCSPlayerPawn* pPawn = service->GetPawn();
-	if(!pPawn) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
+	if(!pPawn) return AcquireResult::Type::Allowed;
 	CCSPlayerController* pController = (CCSPlayerController*)pPawn->GetController();
-	if(!pController) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
-	int iSlot = pController->GetPlayerSlot();
-	if(iSlot < 0 || iSlot >= 64) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
+	if(!pController) return AcquireResult::Type::Allowed;
+	if(iSlot < 0 || iSlot >= 64) return AcquireResult::Type::Allowed;
 	const int iDefIndex = pItemView->m_iItemDefinitionIndex();
 	const char* szWeapon = GetWeaponByDefIndex(iDefIndex);
+	if(!szWeapon) return AcquireResult::Type::Allowed;
 	
 	int iTeam = pPawn->GetTeam();
-	int iPlayersCount = GetNiggers(iTeam);
+	int iPlayersCount = GetPlayersCount(iTeam);
 	
 	int iLast = -1;
 	int bestFit = -1;
@@ -201,33 +176,39 @@ AcquireResult::Type CanAcquireHook(CPlayer_ItemServices* service, CEconItemView*
         {
             int weaponValue = itWeapon->second;
 			int iPlayersWeaponCount = GetWeaponCount(szWeapon, iTeam);
-			if(iPlayersWeaponCount < weaponValue || weaponValue == -1) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
+			if(iPlayersWeaponCount < weaponValue || weaponValue == -1) return AcquireResult::Type::Allowed;
 			else {
-				if(g_pRWApi->SendOnWeaponRestrictedCallback(iSlot, szWeapon))
+				if(g_pRWApi && g_pRWApi->SendOnWeaponRestrictedCallback(iSlot, szWeapon))
 				{
-					if(g_iUnblockType == 1 && weaponValue > 0) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
-					else if(g_iUnblockType == 0) return UTIL_CanAcquire(service, pItemView, eType, pLimit);
+					if(g_iUnblockType == 1 && weaponValue > 0) return AcquireResult::Type::Allowed;
+					else if(g_iUnblockType == 0) return AcquireResult::Type::Allowed;
 				}
 				if(g_iLastMessage[iSlot] + g_iIntervalMessage > std::time(nullptr)) return AcquireResult::Type::NotAllowedByMode;
 				g_iLastMessage[iSlot] = std::time(nullptr);
-				if(!g_szBlockSound.empty()) g_pPlayers->EmitSound(iSlot, pController->entindex(), g_szBlockSound.c_str(), 1, 1.0);
-				g_pUtils->PrintToChat(iSlot, g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"].c_str(), g_vecPhrases[szWeapon].c_str(), weaponValue);
+				if(!g_szBlockSound.empty() && g_pPlayers) g_pPlayers->EmitSound(iSlot, pController->entindex(), g_szBlockSound.c_str(), 1, 1.0);
+				if(g_pUtils)
+				{
+					const std::string& szFormat = g_vecPhrases[g_iTypeWeapons == 2?"block_team":"block"];
+					const std::string& szName = g_vecPhrases[szWeapon];
+					if(!szFormat.empty()) g_pUtils->PrintToChat(iSlot, szFormat.c_str(), szName.c_str(), weaponValue);
+				}
 				return AcquireResult::Type::NotAllowedByMode;
 			}
         }
     }
-	return UTIL_CanAcquire(service, pItemView, eType, pLimit);
+	return AcquireResult::Type::Allowed;
 }
 
 CGameEntitySystem* GameEntitySystem()
 {
+	if(!g_pUtils) return nullptr;
 	return g_pUtils->GetCGameEntitySystem();
 }
 
 void LoadConfigs()
 {
 	{
-		KeyValues* pKV = new KeyValues("RestrictedWeapons");
+		KeyValues::AutoDelete pKV("RestrictedWeapons");
 		char szPath[512];
 		g_SMAPI->Format(szPath, sizeof(szPath), "addons/configs/restricted_weapons.ini");
 		if (!pKV->LoadFromFile(g_pFullFileSystem, szPath))
@@ -241,9 +222,12 @@ void LoadConfigs()
 		g_iUnblockType = pKV->GetInt("unblock_type", 0);
 		g_bSpecPlayers = pKV->GetBool("spec_players", false);
 		g_iIntervalMessage = pKV->GetInt("interval_message", 3);
-		g_szBlockSound = strdup(pKV->GetString("block_sound"));
+		g_szBlockSound = pKV->GetString("block_sound", "");
 		char szMap[64];
-		g_SMAPI->Format(szMap, sizeof(szMap), "%s", g_pUtils->GetCGlobalVars()->mapname);
+		szMap[0] = '\0';
+		CGlobalVars* pGlobals = g_pUtils ? g_pUtils->GetCGlobalVars() : nullptr;
+		if(pGlobals)
+			g_SMAPI->Format(szMap, sizeof(szMap), "%s", pGlobals->mapname);
 
 		KeyValues* pKVDefault = pKV->FindKey("all");
 		if(pKVDefault)
@@ -254,22 +238,27 @@ void LoadConfigs()
 				for (KeyValues *pKVSlot = pKVPlayer->GetFirstSubKey(); pKVSlot; pKVSlot = pKVSlot->GetNextKey())
 				{
 					const char* szWeapon = pKVSlot->GetName();
+					if(!szWeapon) continue;
 					int iWeapons = pKVSlot->GetInt(nullptr);
 					g_mRestrictedWeapons[iCount][szWeapon] = iWeapons;
 				}
 			}
 		}
-		KeyValues* pKVWeapons = pKV->FindKey(szMap);
-		if(pKVWeapons)
+		if(szMap[0])
 		{
-			for (KeyValues *pKVPlayer = pKVWeapons->GetFirstSubKey(); pKVPlayer; pKVPlayer = pKVPlayer->GetNextKey())
+			KeyValues* pKVWeapons = pKV->FindKey(szMap);
+			if(pKVWeapons)
 			{
-				int iCount = atoi(pKVPlayer->GetName());
-				for (KeyValues *pKVSlot = pKVPlayer->GetFirstSubKey(); pKVSlot; pKVSlot = pKVSlot->GetNextKey())
+				for (KeyValues *pKVPlayer = pKVWeapons->GetFirstSubKey(); pKVPlayer; pKVPlayer = pKVPlayer->GetNextKey())
 				{
-					const char* szWeapon = pKVSlot->GetName();
-					int iWeapons = pKVSlot->GetInt(nullptr);
-					g_mRestrictedWeapons[iCount][szWeapon] = iWeapons;
+					int iCount = atoi(pKVPlayer->GetName());
+					for (KeyValues *pKVSlot = pKVPlayer->GetFirstSubKey(); pKVSlot; pKVSlot = pKVSlot->GetNextKey())
+					{
+						const char* szWeapon = pKVSlot->GetName();
+						if(!szWeapon) continue;
+						int iWeapons = pKVSlot->GetInt(nullptr);
+						g_mRestrictedWeapons[iCount][szWeapon] = iWeapons;
+					}
 				}
 			}
 		}
@@ -324,7 +313,7 @@ void RestrictedWeapons::AllPluginsLoaded()
 {
 	char error[64];
 	int ret;
-	g_pUtils = (IUtilsApi *)g_SMAPI->MetaFactory(Utils_INTERFACE, &ret, NULL);
+	g_pUtils = (IUtilsApi *)g_SMAPI->MetaFactory(UTILS_INTERFACE, &ret, NULL);
 	if (ret == META_IFACE_FAILED)
 	{
 		g_SMAPI->Format(error, sizeof(error), "Missing Utils system plugin");
@@ -352,23 +341,17 @@ void RestrictedWeapons::AllPluginsLoaded()
 		return;
 	}
 
-	std::string szLanguage = std::string(g_pUtils->GetLanguage());
+	const char* pszLang = g_pUtils->GetLanguage();
+	std::string szLanguage = pszLang ? std::string(pszLang) : std::string("en");
 	const char* g_pszLanguage = szLanguage.c_str();
 	for (KeyValues *pKey = g_kvPhrases->GetFirstTrueSubKey(); pKey; pKey = pKey->GetNextTrueSubKey())
-		g_vecPhrases[std::string(pKey->GetName())] = std::string(pKey->GetString(g_pszLanguage));
+	{
+		const char* szName = pKey->GetName();
+		if(!szName) continue;
+		g_vecPhrases[std::string(szName)] = std::string(pKey->GetString(g_pszLanguage));
+	}
 
-	CModule libserver(g_pSource2Server);
-	UTIL_CanAcquire = libserver.FindPattern("55 48 89 E5 41 57 41 56 41 55 49 89 CD 41 54 49 89 FC 53 48 89 F3 48 83 EC 78").RCast< decltype(UTIL_CanAcquire) >();
-	if (!UTIL_CanAcquire)
-	{
-		g_pUtils->ErrorLog("[%s] Failed to find function to get UTIL_CanAcquire", g_PLAPI->GetLogTag());
-	}
-	else
-	{
-		m_CanAcquireHook = funchook_create();
-		funchook_prepare(m_CanAcquireHook, (void**)&UTIL_CanAcquire, (void*)CanAcquireHook);
-		funchook_install(m_CanAcquireHook, 0);
-	}
+	g_pUtils->AddCanAcquirePre(g_PLID, CanAcquireHook);
 }
 
 ///////////////////////////////////////
