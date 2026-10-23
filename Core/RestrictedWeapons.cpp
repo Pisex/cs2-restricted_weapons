@@ -199,12 +199,6 @@ AcquireResult::Type CanAcquireHook(int iSlot, CPlayer_ItemServices* service, CEc
 	return AcquireResult::Type::Allowed;
 }
 
-CGameEntitySystem* GameEntitySystem()
-{
-	if(!g_pUtils) return nullptr;
-	return g_pUtils->GetCGameEntitySystem();
-}
-
 void LoadConfigs()
 {
 	{
@@ -282,6 +276,7 @@ bool RestrictedWeapons::Load(PluginId id, ISmmAPI* ismm, char* error, size_t max
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetServerFactory, g_pSource2Server, ISource2Server, SOURCE2SERVER_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 
 	g_SMAPI->AddListener( this, this );
 

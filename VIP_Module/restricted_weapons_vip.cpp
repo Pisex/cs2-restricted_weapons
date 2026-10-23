@@ -14,12 +14,6 @@ IUtilsApi* g_pUtils;
 IVIPApi* g_pVIPApi;
 IRWApi* g_pRWApi;
 
-CGameEntitySystem* GameEntitySystem()
-{
-	if(!g_pUtils) return nullptr;
-	return g_pUtils->GetCGameEntitySystem();
-}
-
 void StartupServer()
 {
 	if(!g_pUtils) return;
@@ -38,6 +32,7 @@ bool restricted_weapons_vip::Load(PluginId id, ISmmAPI* ismm, char* error, size_
 	GET_V_IFACE_CURRENT(GetEngineFactory, g_pCVar, ICvar, CVAR_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetEngineFactory, g_pSchemaSystem, ISchemaSystem, SCHEMASYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer2, SOURCE2ENGINETOSERVER_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, g_pGameResourceServiceServer, IGameResourceService, GAMERESOURCESERVICESERVER_INTERFACE_VERSION);
 
 	g_SMAPI->AddListener( this, this );
 
